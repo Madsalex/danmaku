@@ -1,8 +1,9 @@
 import os
+import random
 import pygame
 
 
-class Background(pygame.sprite.Sprite):
+class Background(pygame.sprite.Sprite):  # класс фона, нужен для прокрутки
     def __init__(self, name):
         pygame.sprite.Sprite.__init__(self)
         self.image = load_image(name)
@@ -11,15 +12,18 @@ class Background(pygame.sprite.Sprite):
         self.rect.y = self.rect[1]
 
 
-class Player(pygame.sprite.Sprite):
+class Player(pygame.sprite.Sprite):  # класс игрока
     def __init__(self):
-        super().__init__(player_group)
+        super().__init__(player_group, all_sprites)
         self.image = load_image('character.png')
         self.rect = self.image.get_rect()
+        self.rect[2] -= 5
+        self.rect[3] -= 5
         self.rect.x = 0
         self.rect.y = 0
+        self.hp = 100
 
-    def update(self):
+    def update(self):  # проверка на столкновения и выход за границы
         if self.rect.x < 0:
             self.rect.x = 0
         elif self.rect.x > width - 29:
@@ -29,18 +33,128 @@ class Player(pygame.sprite.Sprite):
         elif self.rect.y > height - 36:
             self.rect.y = height - 36
 
+        if pygame.sprite.spritecollideany(self, enemy_group):
+            self.hp = 0
+        if pygame.sprite.spritecollideany(self, bullet_group):
+            self.hp -= 10
+        if self.hp <= 0:
+            player.kill()
 
-class Enemy(pygame.sprite.Sprite):
-    def __init__(self, type='ghost'):
-        super().__init__(enemy_group)
-        if type == 'ghost':
-            self.image = load_image('ghost.png')
+
+class Enemy(pygame.sprite.Sprite):  # класс врагов
+    def __init__(self, x, y, enemy_type):
+        super().__init__(enemy_group, all_sprites)
+        self.enemy_type = enemy_type
+        self.extra = []
+        if enemy_type == 'ghost':  # бродит в разные стороны
+            self.images = [load_image('ghost1.png'), load_image('ghost2.png'),
+                           load_image('ghost3.png'), load_image('ghost4.png')]
+        elif enemy_type == 'ninja':  # стоит на месте, кидает сюрикен
+                                     # и в это время совершает рывок к игроку
+            self.images = [load_image('ninja1.png'), load_image('ninja2.png'),
+                           load_image('ninja3.png'), load_image('ninja4.png')]
+            self.extra = [load_image('ninja_e1.png'),
+                          load_image('ninja_e2.png')]
+        self.image = self.images[0]
         self.rect = self.image.get_rect()
-        self.rect.x = 0
-        self.rect.y = 0
+        self.rect.x = x
+        self.rect.y = y
+        self.direction = 0
+        self.moving = 0
+        self.sprite_index = 0
+        self.fps_index = [0, 0, 0, 0]  # индексы для разных действий:
+                                       # интервал смены спрайтов, счетчик
+                                       # кадров, интервал смены экстра-спрайтов
+                                       # и метания сюрикенов
+
+    def update(self):
+        self.fps_index[0] += 1
+        self.fps_index[1] += 1
+        if self.fps_index[0] >= 10:
+            self.fps_index[0] = 0
+            self.sprite_index += 1
+            try:
+                self.image = self.images[self.sprite_index]
+                if self.fps_index[2] and self.fps_index[2] != 4:
+                    self.fps_index[2] += 1
+            except IndexError:
+                self.sprite_index = 0
+                self.image = self.images[self.sprite_index]
+        if self.fps_index[2] == 4:
+            self.kill()
+        if self.enemy_type == 'ghost':
+            self.rect.y += 1
+            if self.sprite_index == 0 and self.fps_index[0] == 0:
+                self.direction = random.choice([-1, 1])
+            self.rect.x += self.direction
+        elif self.enemy_type == 'ninja':
+            self.acting_like_a_ninja()
+
+    def acting_like_a_ninja(self):
+        if self.fps_index[1] >= 600:
+            self.images, self.extra = self.extra, self.images
+            self.image = self.images[0]
+            bullet = Bullet(self.rect.x, self.rect.y, player.rect.x,
+                            player.rect.y, 'ninja')
+            self.fps_index[2] += 1
+        elif self.fps_index[1] % 20 == 0:
+            self.moving = True
+        if self.moving:
+            if self.rect.y < player.rect.y:
+                self.rect.y += 1
+            elif self.rect.y == player.rect.y:
+                pass
+            else:
+                self.rect.y -= 1
+            if self.rect.x < player.rect.x:
+                self.rect.x += 1
+            elif self.rect.x == player.rect.x:
+                pass
+            else:
+                self.rect.x -= 1
+        #    self.direction = 0
+        # self.rect.y += 10
+        # self.rect.x = 30
+        if self.rect.y == height or self.rect.x == (width or 0):
+            self.kill()
 
 
-def load_image(name, colorkey=None):
+class Bullet(pygame.sprite.Sprite):  # класс враждебных объектов
+    def __init__(self, x, y, dest_x, dest_y, enemy_type):
+        super().__init__(bullet_group, all_sprites)
+        self.bullet_type = enemy_type
+        if enemy_type == 'ninja':
+            self.images = [load_image('shuriken1.png'),
+                           load_image('shuriken2.png')]
+        self.image = self.images[0]
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.destination = (dest_x, dest_y)
+        self.direction = [3, 3]
+        if self.destination[0] < self.rect.x:
+            self.direction[0] = -self.direction[0]
+        if self.destination[1] < self.rect.y:
+            self.direction[1] = -self.direction[1]
+        self.sprite_index, self.fps_index = 0, 0
+
+    def update(self):  # проверка направления и координат
+        self.fps_index += 1
+        if self.fps_index >= 10:
+            self.fps_index = 0
+            self.sprite_index += 1
+            try:
+                self.image = self.images[self.sprite_index]
+            except IndexError:
+                self.sprite_index = 0
+                self.image = self.images[self.sprite_index]
+        self.rect.x += self.direction[0]
+        self.rect.y += self.direction[1]
+        if self.rect.y == height or self.rect.x == (width or 0):
+            self.kill()
+
+
+def load_image(name, colorkey=None):  # загрузка изображения
     fullname = os.path.join('data', name)
     try:
         image = pygame.image.load(fullname)
@@ -52,26 +166,8 @@ def load_image(name, colorkey=None):
         image.set_colorkey(colorkey)
     return image
 
-pygame.init()
-size = width, height = 500, 800
-screen = pygame.display.set_mode(size)
-screen.fill((0, 0, 0))
-player_group = pygame.sprite.Group()
-enemy_group = pygame.sprite.Group()
-background = Background('bg.png')
-player = Player()
-player.rect = player.image.get_rect()
-player.rect.x = width // 2
-player.rect.y = (height // 4) * 3
-
-fps = 60
-speed = 1
-clock = pygame.time.Clock()
-shift = False
-bg_flag = True
-bg_number = -1
-
-while 1:
+def events():  # обработка событий из главного цикла
+    global shift, speed
     for e in pygame.event.get():
         if e.type == pygame.QUIT:
             pygame.quit()
@@ -92,6 +188,34 @@ while 1:
         player.rect.x -= speed
     if keys[pygame.K_RIGHT]:
         player.rect.x += speed
+
+# инициализация и ввод основных переменных
+pygame.init()
+size = width, height = 500, 800
+screen = pygame.display.set_mode(size)
+screen.fill((0, 0, 0))
+all_sprites = pygame.sprite.Group()
+player_group = pygame.sprite.Group()
+enemy_group = pygame.sprite.Group()
+bullet_group = pygame.sprite.Group()
+background = Background('bg.png')
+player = Player()
+player.rect = player.image.get_rect()
+player.rect.x = width // 2
+player.rect.y = (height // 4) * 3
+
+fps = 60
+speed = 1
+clock = pygame.time.Clock()
+shift = False
+bg_flag = True
+bg_number = -1
+spawn_timer = 0
+spawn_flag = True
+
+while 1:  # игровой цикл
+    events()
+    spawn_timer += 1
     screen.blit(background.image, background.rect)
     if -1500 >= background.rect.y and bg_flag:
         bg_number = -bg_number
@@ -100,8 +224,12 @@ while 1:
         bg_number = -bg_number
         bg_flag = True
     background.rect.y += bg_number
-    player_group.draw(screen)
-    player_group.update()
+    all_sprites.draw(screen)
+    all_sprites.update()
+    if spawn_timer == 150 and spawn_flag:
+        enemy = Enemy(random.randint(0, width), -40,
+                      random.choice(['ghost', 'ninja']))
+        spawn_timer = 0
     clock.tick(fps)
     pygame.display.flip()
 
