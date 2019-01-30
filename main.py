@@ -1,5 +1,6 @@
 import os
 import random
+import math
 import pygame
 
 
@@ -69,15 +70,13 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
         self.rect.x = x
         self.rect.y = y
         self.direction = 0
-        self.sprite_index = 0
+        self.sprite_index = 0  # индекс кадра в анимации спрайта
         self.fps_index = [0, 0, 0, 0]  # индексы для разных действий:
                                        # интервал смены спрайтов, счетчик
                                        # кадров, интервал смены экстра-спрайтов
                                        # и метания сюрикенов
 
     def update(self):
-        if pygame.sprite.spritecollideany(self, bullet_group):  # во врага тоже
-            self.kill()                                         # могут попасть
         self.fps_index[0] += 1
         self.fps_index[1] += 1
         if self.fps_index[0] >= 10:
@@ -105,7 +104,7 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
             self.images, self.extra = self.extra, self.images
             self.image = self.images[0]
             bullet = Bullet(self.rect.x, self.rect.y, player.rect.x,
-                            player.rect.y, 'ninja')
+                            player.rect.y, 'ninja')  # кидает сюрикен
             self.fps_index[2] += 1
             self.fps_index[3] = 1
         if self.rect.y < player.rect.y:
@@ -131,19 +130,17 @@ class Bullet(pygame.sprite.Sprite):  # класс враждебных объе�
         if enemy_type == 'ninja':
             self.images = [load_image('shuriken1.png'),
                            load_image('shuriken2.png')]
+            self.speed = [3, 3]
         self.image = self.images[0]
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
-        self.destination = (dest_x, dest_y)
-        self.direction = [3, 3]
-        if self.destination[0] < self.rect.x:
-            self.direction[0] = -self.direction[0]
-        if self.destination[1] < self.rect.y:
-            self.direction[1] = -self.direction[1]
+        self.destination = (dest_x, dest_y)  # координаты цели
         self.sprite_index, self.fps_index = 0, 0
 
     def update(self):  # проверка направления и координат
+        angle = math.atan2(self.destination[0] - self.rect.x,
+                           self.destination[1] - self.rect.y)
         self.fps_index += 1
         if self.fps_index >= 10:
             self.fps_index = 0
@@ -153,8 +150,9 @@ class Bullet(pygame.sprite.Sprite):  # класс враждебных объе�
             except IndexError:
                 self.sprite_index = 0
                 self.image = self.images[self.sprite_index]
-        self.rect.x += self.direction[0]
-        self.rect.y += self.direction[1]
+        self.rect.x += math.cos(angle) * 10
+        print(angle)
+        self.rect.y += math.cos(angle) * 10
         if self.rect.y == height or self.rect.x == (width or 0):
             self.kill()
 
@@ -197,6 +195,7 @@ def events():  # обработка событий из главного цик�
         player.rect.x += speed
 
 def game_over():  # анимация экрана конца игры
+    """
     global player, background, screen
     while player.killed:
         for event in pygame.event.get():
@@ -206,6 +205,8 @@ def game_over():  # анимация экрана конца игры
         screen.blit(game_over_bg.image, game_over_bg.rect)
         if 0 >= game_over_bg.rect.y:
             background.rect.y -= 1
+    """
+    pass
 
 def initialize():  # создание переменных вынесено в отдельную функцию для того,
                    # чтобы можно было легко начать новую игру после проигрыша
@@ -233,7 +234,7 @@ def game_main_cycle():  # выношу цикл в отдельную функц
         events()
         spawn_timer += 1
         screen.blit(background.image, background.rect)
-        if -800 <= background.rect.y:
+        if -800 == background.rect.y:
             background.rect.y = -3200
         background.rect.y += bg_number
         all_sprites.draw(screen)
@@ -252,7 +253,6 @@ size = width, height = 500, 800
 screen = pygame.display.set_mode(size)
 screen.fill((0, 0, 0))
 fps = 60
-game_over_bg = Background('game over.png') 
 
 initialize()
 game_main_cycle()
