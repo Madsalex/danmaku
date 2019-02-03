@@ -16,11 +16,11 @@ class Background(pygame.sprite.Sprite):  # класс фона, нужен дл�
 
 class Player(pygame.sprite.Sprite):  # класс игрока
     def __init__(self):
-        super().__init__(all_sprites)
+        super().__init__(all_sprites, player_group)
         self.images = [load_image('character.png'),
                        load_image('character2.png'),
                        load_image('character3.png'),
-                       load_image('character2.png'),]
+                       load_image('character2.png')]
         self.image = self.images[0]
         self.rect = self.image.get_rect()
         self.rect[2] -= 5
@@ -41,7 +41,7 @@ class Player(pygame.sprite.Sprite):  # класс игрока
                 self.image = self.images[self.sprite_index]
             except IndexError:
                 self.sprite_index = 0
-                self.image = self.images[self.sprite_index]        
+                self.image = self.images[self.sprite_index]
         if self.rect.x < 0:
             self.rect.x = 0
         elif self.rect.x > width - 29:
@@ -73,6 +73,10 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
         if enemy_type == 'ghost':  # бродит в разные стороны
             self.images = [load_image('ghost1.png'), load_image('ghost2.png'),
                            load_image('ghost3.png'), load_image('ghost4.png')]
+            self.death_sound = pygame.mixer.Sound('data/ghost.wav')
+            self.explode = [load_image('minus_ghost.png'),
+                            load_image('minus_ghost2.png'),
+                            load_image('minus_ghost3.png')]
         elif enemy_type == 'ninja':  # стоит на месте, кидает сюрикен
                                     # и в это время совершает рывок к игроку
             self.images = [load_image('ninja1.png'), load_image('ninja2.png'),
@@ -81,8 +85,9 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
                           load_image('ninja_e2.png'),
                           load_image('ninja_e3.png'),
                           load_image('ninja_e4.png')]
-        self.explode = [load_image('e_1.png'), load_image('e_2.png'),
-                        load_image('e_3.png')]
+            self.explode = [load_image('e_1.png'), load_image('e_2.png'),
+                            load_image('e_3.png')]
+            self.death_sound = pygame.mixer.Sound('data/ghost.wav')
         self.image = self.images[0]
         self.rect = self.image.get_rect()
         self.rect.x = x
@@ -92,10 +97,13 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
         self.fps_index = [0, 0, 0, 0, 0]  # индексы для разных действий:
         # интервал смены спрайтов, счетчик кадров, интервал смены
         # экстра-спрайтов, метания сюрикенов и взрывов
+        self.random_attack = random.randint(10, 700)
 
     def update(self):
         if pygame.sprite.spritecollideany(self, player_bullet_group):
             self.images, self.explode = self.explode, self.images
+            self.death_sound.play()
+            self.image = self.images[0]
             self.sprite_index = 0
             self.fps_index[4] = 1
         if self.fps_index[4]:
@@ -125,11 +133,12 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
             self.acting_like_a_ninja()
 
     def acting_like_a_ninja(self):  # отдельно вынесенное поведение ниндзи
-        if self.fps_index[1] >= 600 and not self.fps_index[3]:
+        if self.fps_index[1] >= self.random_attack and not self.fps_index[3]:
             self.images, self.extra = self.extra, self.images
             self.image = self.images[0]
-            bullet = Bullet(self.rect.x, self.rect.y, player.rect.x,
-                            player.rect.y, 'ninja')  # кидает сюрикен
+            bullet = Bullet(self.rect.x, self.rect.y, (player.rect.x,
+                            player.rect.y), 'ninja')  # кидает сюрикен
+            pygame.mixer.Sound('data/attack.wav').play()
             self.fps_index[2] += 1
             self.fps_index[3] = 1
         if self.rect.y < player.rect.y:
@@ -149,25 +158,25 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
 
 
 class Bullet(pygame.sprite.Sprite):  # класс враждебных объектов
-    def __init__(self, x, y, dest_x, dest_y, enemy_type):
+    def __init__(self, x, y, dest, enemy_type):
         super().__init__(bullet_group, all_sprites)
         self.bullet_type = enemy_type
         if enemy_type == 'ninja':
             self.images = [load_image('shuriken1.png'),
                            load_image('shuriken2.png')]
-            self.speed = [3, 3]
         self.image = self.images[0]
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
-        self.destination = (dest_x, dest_y)  # координаты цели
+        self.dest_x, self.dest_y = dest[0], dest[1]  # координаты цели
         self.sprite_index, self.fps_index = 0, 0
-        self.dir_x = random.choice([3, -3, 0])
-        self.dir_y = random.choice([3, -3])
+        self.distance = math.sqrt((self.dest_x - self.rect.x) ** 2 +
+                                  (self.dest_y - self.rect.y) ** 2)
+        self.timer = 500
 
     def update(self):  # проверка направления и координат
-        angle = math.atan2(self.destination[0] - self.rect.x,
-                           self.destination[1] - self.rect.y)
+        if not self.timer:
+            self.kill()
         self.fps_index += 1
         if self.fps_index >= 10:
             self.fps_index = 0
@@ -177,16 +186,17 @@ class Bullet(pygame.sprite.Sprite):  # класс враждебных объе�
             except IndexError:
                 self.sprite_index = 0
                 self.image = self.images[self.sprite_index]
-        self.rect.x += math.degrees(angle)
-        self.rect.y += math.degrees(angle)
-        self.rect.x += self.dir_x
-        self.rect.y += self.dir_y
-        if self.rect.y == height or self.rect.x == (width or 0):
+        k = 7 / self.distance
+        self.rect.x = self.rect.x + (self.dest_x - self.rect.x) * k
+        self.rect.y = self.rect.y + (self.dest_y - self.rect.y) * k
+        if self.rect.y == height or self.rect.x == (width or 0) or k < 0.01:
             self.kill()
+        self.timer -= 1
 
 
 class PlayerBullet(pygame.sprite.Sprite):  # класс пуль игрока
     def __init__(self, dir_x, dir_y):
+        pygame.mixer.Sound('data/attack.wav').play()
         super().__init__(player_bullet_group, all_sprites)
         self.image = load_image('player_bullet.png')
         self.dir_x, self.dir_y = dir_x, dir_y
@@ -195,8 +205,35 @@ class PlayerBullet(pygame.sprite.Sprite):  # класс пуль игрока
         self.rect.y = player.rect.y
 
     def update(self):
+        global score
+        if pygame.sprite.spritecollideany(self, enemy_group):
+            pygame.mixer.Sound('data/attack.wav').play()
+            score += 1
+            self.kill()
+        if pygame.sprite.spritecollideany(self, bullet_group):
+            pygame.mixer.Sound('data/collision.wav').play()
+            pygame.sprite.spritecollideany(self, bullet_group).kill()
+            self.kill()
         self.rect.x += self.dir_x
         self.rect.y += self.dir_y
+
+
+class ScoreBox(pygame.sprite.Sprite):  # экземпляры этого класса дают игроку
+                                    # +10 очков при столкновении с ними
+    def __init__(self):
+        super().__init__(all_sprites)
+        self.image = load_image('score_stuff.png')
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(19, 479)
+        self.rect.y = 0
+
+    def update(self):
+        global score
+        if pygame.sprite.spritecollideany(self, player_group):
+            pygame.mixer.Sound('data/got.wav').play()
+            score += 1
+            self.kill()
+        self.rect.y += 1
 
 
 def load_image(name, colorkey=None):  # загрузка изображения
@@ -227,20 +264,11 @@ def events():  # обработка событий из главного цик�
                 speed //= 2
                 shift = False
             elif e.key == pygame.K_SPACE:
+                global score
                 dir_x, dir_y = 0, -5
-                """
-                if keys[pygame.K_DOWN]:
-                    dir_y = 5
-                elif keys[pygame.K_UP]:
-                    dir_y = -5
-                if keys[pygame.K_RIGHT]:
-                    dir_x = 5
-                elif keys[pygame.K_LEFT]:
-                    dir_x = -5
-                if dir_x == dir_y == 0:
-                    dir_y = -5
-                """
-                player_bullet = PlayerBullet(dir_x, dir_y)
+                if score * 10 >= 3:
+                    player_bullet = PlayerBullet(dir_x, dir_y)
+                    score -= 0.3
     if keys[pygame.K_UP]:
         player.rect.y -= speed
     if keys[pygame.K_DOWN]:
@@ -272,48 +300,64 @@ def game_over():  # анимация экрана конца игры
         'Макс. очки: ' + str(int(max_score)), 1, color)
     max_score_text_x, max_score_text_y = 100, 900  # 100, 700
     clock = pygame.time.Clock()
+    button1_text = font.render("Заново", 1, (255, 255, 255))
+    button2_text = font.render("В меню", 1, (255, 255, 255))
     timer = 0
+    current = COLOR
     while player.killed:
         timer += 1
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                terminate()
-                quit()
-        if text_y != 170:
-            text_y += 2
-        if text2_y != 240:
-            text2_y += 2
-        if score_text_y != 400:
-            score_text_y += 2
-        if max_score_text_y != 700:
-            max_score_text_y -= 2
-        circleRect = pygame.draw.circle(screen, anticolor,
-                                        (300, 400), 1 + timer, 1)
+        circle = pygame.draw.circle(screen, anticolor,
+                                    (300, 400), 1 + timer, 1)
         screen.blit(black_surface, (0, 0))
         screen.blit(text, (text_x, text_y))
         screen.blit(text2, (text2_x, text2_y))
         screen.blit(score_text, (score_text_x, score_text_y))
         screen.blit(max_score_text, (max_score_text_x, max_score_text_y))
+        mouse = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+        if text_y != 100:
+            text_y += 2
+        if text2_y != 170:
+            text2_y += 2
+        if score_text_y != 300:
+            score_text_y += 2
+        if max_score_text_y != 500:
+            max_score_text_y -= 2
+        if 245 > mouse[0] > 20 and 765 > mouse[1] > 700:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                initialize()
+                game_main_cycle()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 700, 225, 65))
+        pygame.draw.rect(screen, current, (22, 702, 221, 61))
+        screen.blit(button1_text, (50, 710))
+        if 475 > mouse[0] > 250 and 765 > mouse[1] > 700:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                menu(button=True)
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (250, 700, 225, 65))
+        pygame.draw.rect(screen, current, (252, 702, 221, 61))
+        screen.blit(button2_text, (270, 710))
         pygame.display.flip()
         clock.tick(100)
-        if timer == 1000:
-            break
-    score = 0
-    # score_screen()
     menu()
-    # initialize()
-    # while
-    # здесь я доделаю возвращение к меню
 
 
 def initialize():  # создание переменных вынесено в отдельную функцию для того,
     # чтобы можно было легко начать новую игру после проигрыша
     global all_sprites, enemy_group, bullet_group, background, player, speed
     global clock, shift, spawn_flag, max_spawn, level, player_bullet_group
-    level = 1
+    global score, player_group
     all_sprites = pygame.sprite.Group()
     enemy_group = pygame.sprite.Group()
     bullet_group = pygame.sprite.Group()
+    player_group = pygame.sprite.Group()
     player_bullet_group = pygame.sprite.Group()
     player = Player()
     player.rect = player.image.get_rect()
@@ -321,60 +365,261 @@ def initialize():  # создание переменных вынесено в �
     player.rect.y = (height // 4) * 3
     speed = 2
     shooting = False
+    score = 0
     clock = pygame.time.Clock()
     shift = False
     spawn_flag = True
-    game_main_cycle()
 
 
 def game_main_cycle():  # выношу цикл в отдельную функцию по причине,
                         # указанной выше
     global score
     max_spawn = 200
-    score = 0
     spawn_timer = 0
     if level == 1:
         e_type = ['ghost']
         background = Background('bg.png')
+        pygame.mixer.music.load('data/level_music.mp3')
+        pygame.mixer.music.play(-1)
         minus_spawn = 0
+        time_left = 50
+        speed = 1
     elif level == 2:
         e_type = ['ghost', 'ninja']
         background = Background('bg2.png')
+        pygame.mixer.music.load('data/level2_music.mp3')
+        pygame.mixer.music.play(-1)
         minus_spawn = 0.01
+        time_left = 100
+        speed = 2
     elif level == 3:
         e_type = ['ghost', 'ninja']
         background = Background('bg3.png')
+        pygame.mixer.music.load('data/level3_music.mp3')
+        pygame.mixer.music.play(-1)
         minus_spawn = 0.01
+        time_left = 500
+        speed = 3
+    font = pygame.font.Font('data/font.ttf', 25)
     background.rect.y = -3200
     while not player.killed:  # игровой цикл
+        text = font.render('Очки: ' + str(int(score * 10)), 1, (255, 255, 255))
+        text2 = font.render('Осталось: ' + str(int(time_left)),
+                            1, (255, 255, 255))
         events()
+        if int(time_left) == 0:
+            pygame.mixer.music.stop()
+            victory()
+        time_left -= 0.01
         max_spawn -= minus_spawn
         spawn_timer += 1
         screen.blit(background.image, (background.rect.x, background.rect.y))
-        if -32 <= background.rect.y:
-            background.rect.y = -3232
-        background.rect.y += 1
+        if 0 == background.rect.y:
+            background.rect.y = -1185
+        background.rect.y += speed
         all_sprites.draw(screen)
         all_sprites.update()
-        score += 0.01
+        screen.blit(text, (10, 5))
+        screen.blit(text2, (300, 5))
+        score += 0.001
         if spawn_timer >= max_spawn and spawn_flag:
+            spawn_box = random.choice([0, 0, 0, 0, 0, 0, 0, 0, 1])
+            if spawn_box:
+                ScoreBox()
             enemy = Enemy(random.randint(0, width), -40, random.choice(e_type))
             spawn_timer = 0
         clock.tick(fps)
         pygame.display.flip()
-    game_over()
+    pygame.mixer.music.stop()
 
-def menu():  # главное меню
-    def __init__(self):
-        menu_images = [load_image('menu1.png'), load_image('menu2.png'),
-                       load_image('menu3.png'), load_image('menu4.png')]
-        menu_image = Background(menu_images[0])
+
+def victory():  # экран победы
+    global score, level
+    pygame.mixer.Sound('data/victory.ogg').play()
+    score = str(int(score * 10))
+    save_score()
+    black_surface = pygame.Surface((width, height))
+    black_surface.fill((0, 0, 0))
+    black_surface.set_alpha(5)
+    text = font.render("Вам удалось", 1, (255, 255, 255))
+    text_x, text_y = 40, 0
+    text1 = font.render("пройти уровень!", 1, (255, 255, 255))
+    text1_x, text1_y = 60, 0
+    text2 = font.render("Ваш счет:", 1, (255, 255, 255))
+    text2_x, text2_y = 70, 0  # 70, 240
+    big_font = pygame.font.Font('data/font.ttf', 150)
+    score_text = big_font.render(str(int(score)), 1, (255, 255, 255))
+    score_text_x, score_text_y = 150, 0  # 150, 400
+    max_score_text = font.render(
+        'Макс. очки: ' + str(int(max_score)), 1, (255, 255, 255))
+    max_score_text_x, max_score_text_y = 100, 900  # 100, 700
+    clock = pygame.time.Clock()
+    if level != 3:
+        button1_text = font.render("След. ур.", 1, (255, 255, 255))
+        level += 1
+    else:
+        button1_text = font.render("Уровень 1", 1, (255, 255, 255))
+        level = 1
+    button2_text = font.render("В меню", 1, (255, 255, 255))
+    timer = 0
+    current = COLOR
+    while player:
+        timer += 1
+        circle = pygame.draw.circle(screen, (0, 0, 255),
+                                    (300, 400), 1 + timer, 1)
+        screen.blit(black_surface, (0, 0))
+        screen.blit(text, (text_x, text_y))
+        screen.blit(text1, (text1_x, text1_y))
+        screen.blit(text2, (text2_x, text2_y))
+        screen.blit(score_text, (score_text_x, score_text_y))
+        screen.blit(max_score_text, (max_score_text_x, max_score_text_y))
+        mouse = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+        if text_y != 60:
+            text_y += 2
+        if text1_y != 100:
+            text1_y += 2
+        if text2_y != 170:
+            text2_y += 2
+        if score_text_y != 300:
+            score_text_y += 2
+        if max_score_text_y != 500:
+            max_score_text_y -= 2
+        if 245 > mouse[0] > 20 and 765 > mouse[1] > 700:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                initialize()
+                game_main_cycle()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 700, 225, 65))
+        pygame.draw.rect(screen, current, (22, 702, 221, 61))
+        screen.blit(button1_text, (30, 710))
+        if 475 > mouse[0] > 250 and 765 > mouse[1] > 700:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                menu(button=True)
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (250, 700, 225, 65))
+        pygame.draw.rect(screen, current, (252, 702, 221, 61))
+        screen.blit(button2_text, (270, 710))
+        pygame.display.flip()
+        clock.tick(100)
+
+
+def menu(button=False):  # главное меню
+    menu_image = load_image('menu1.png')
+    pygame.mixer.music.load('data/level2_music.mp3')
+    pygame.mixer.music.play(-1)
+    clock = pygame.time.Clock()
+    button1_text = font.render("Начать игру", 1, (255, 255, 255))
+    button2_text = font.render("Таблица рекордов", 1, (255, 255, 255))
+    button3_text = font.render("Выйти из игры", 1, (255, 255, 255))
+    current = COLOR
+    while 1:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+        screen.blit(menu_image, (0, 0))
+        mouse = pygame.mouse.get_pos()
+        if 480 > mouse[0] > 20 and 620 > mouse[1] > 555:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                pygame.time.wait(1)
+                choose_level()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 555, 460, 65))
+        pygame.draw.rect(screen, current, (22, 557, 456, 61))
+        screen.blit(button1_text, (100, 565))
+        if 480 > mouse[0] > 20 and 690 > mouse[1] > 625:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                save_score()
+                score_screen()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 625, 460, 65))
+        pygame.draw.rect(screen, current, (22, 627, 456, 61))
+        screen.blit(button2_text, (25, 635))
+        if 480 > mouse[0] > 20 and 760 > mouse[1] > 695:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1 and not button:
+                terminate()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 695, 460, 65))
+        pygame.draw.rect(screen, current, (22, 697, 456, 61))
+        screen.blit(button3_text, (80, 705))
+        pygame.display.flip()
+        if clock.tick() > 8:
+            button = False
+
+
+def choose_level():  # выбор уровня
+    global level
+    initialize()
+    image = load_image('gradient.png')
+    button1_text = font.render("Уровень 1", 1, (255, 255, 255))
+    button2_text = font.render("Уровень 2", 1, (255, 255, 255))
+    button3_text = font.render("Уровень 3", 1, (255, 255, 255))
+    button4_text = font.render("Выйти в меню", 1, (255, 255, 255))
+    current = COLOR
+    while 1:
+        screen.blit(image, (0, 0))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+        mouse = pygame.mouse.get_pos()
+        if 480 > mouse[0] > 20 and 120 > mouse[1] > 55:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                level = 1
+                game_main_cycle()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 55, 460, 65))
+        pygame.draw.rect(screen, current, (22, 57, 456, 61))
+        screen.blit(button1_text, (150, 65))
+        if 480 > mouse[0] > 20 and 190 > mouse[1] > 125:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                level = 2
+                game_main_cycle()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 125, 460, 65))
+        pygame.draw.rect(screen, current, (22, 127, 456, 61))
+        screen.blit(button2_text, (150, 135))
+        if 480 > mouse[0] > 20 and 260 > mouse[1] > 195:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                level = 3
+                game_main_cycle()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 195, 460, 65))
+        pygame.draw.rect(screen, current, (22, 197, 456, 61))
+        screen.blit(button3_text, (150, 205))
+        if 480 > mouse[0] > 20 and 365 > mouse[1] > 300:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                menu()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 300, 460, 65))
+        pygame.draw.rect(screen, current, (22, 302, 456, 61))
+        screen.blit(button4_text, (80, 310))
+        pygame.display.flip()
 
 
 def save_score():  # сохранение и сортировка очков в порядке убывания
     global max_score, record_list
     with open('data/records.txt', 'a') as rec:
-        rec.write('\n' + score)
+        rec.write('\n' + str(score))
     with open('data/records.txt', 'r') as rec:
         record_list = rec.read().split()
     record_list = list(map(int, record_list))
@@ -386,21 +631,35 @@ def save_score():  # сохранение и сортировка очков в 
             rec.write(str(i) + '\n')
     max_score = max(record_list)
 
+
 def terminate():  # выход из игры
     pygame.quit()
     sys.exit()
+
 
 def score_screen():  # таблица рекордов
     records = record_list
     font = pygame.font.Font('data/font.ttf', 60)
     bg = Background('record_table.png')
     x, y = 90, 140
+    clock = pygame.time.Clock()
+    button_text = font.render("Выйти в меню", 1, (255, 255, 255))
     while 1:
         y = 140
+        mouse = pygame.mouse.get_pos()
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 terminate()
         screen.blit(bg.image, (bg.rect.x, bg.rect.y))
+        if 480 > mouse[0] > 20 and 735 > mouse[1] > 670:
+            current = HOVER_COLOR
+            if pygame.mouse.get_pressed()[0] == 1:
+                menu()
+        else:
+            current = COLOR
+        pygame.draw.rect(screen, (255, 255, 255), (20, 670, 460, 65))
+        pygame.draw.rect(screen, current, (22, 672, 456, 61))
+        screen.blit(button_text, (50, 680))
         for i in records:
             text = font.render(str(i), 1, (255, 255, 255))
             screen.blit(text, (x, y))
@@ -413,7 +672,10 @@ size = width, height = 500, 800
 screen = pygame.display.set_mode(size)
 screen.fill((0, 0, 0))
 fps = 60
+font = pygame.font.Font('data/font.ttf', 50)
+COLOR, HOVER_COLOR = (170, 50, 50), (190, 60, 60)
+current = COLOR
 
-# menu()
 initialize()
+menu()
 game_main_cycle()
