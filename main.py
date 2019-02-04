@@ -414,8 +414,8 @@ def game_main_cycle():  # выношу цикл в отдельную функц
         max_spawn -= minus_spawn
         spawn_timer += 1
         screen.blit(background.image, (background.rect.x, background.rect.y))
-        if 0 == background.rect.y:
-            background.rect.y = -1185
+        if 0 <= background.rect.y:
+            background.rect.y = -3200
         background.rect.y += speed
         all_sprites.draw(screen)
         all_sprites.update()
