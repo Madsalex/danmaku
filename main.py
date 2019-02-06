@@ -96,7 +96,7 @@ class Enemy(pygame.sprite.Sprite):  # класс врагов
         self.sprite_index = 0  # индекс кадра в анимации спрайта
         self.fps_index = [0, 0, 0, 0, 0]  # индексы для разных действий:
         # интервал смены спрайтов, счетчик кадров, интервал смены
-        # экстра-спрайтов, метания сюрикенов и взрывов
+        # особых спрайтов, метания сюрикенов и взрывов
         self.random_attack = random.randint(10, 700)
 
     def update(self):
@@ -269,6 +269,8 @@ def events():  # обработка событий из главного цик�
                 if score * 10 >= 3:
                     player_bullet = PlayerBullet(dir_x, dir_y)
                     score -= 0.3
+            elif e.key == pygame.K_t:
+                pause()
     if keys[pygame.K_UP]:
         player.rect.y -= speed
     if keys[pygame.K_DOWN]:
@@ -277,6 +279,18 @@ def events():  # обработка событий из главного цик�
         player.rect.x -= speed
     if keys[pygame.K_RIGHT]:
         player.rect.x += speed
+
+
+def pause():  # пауза
+    pause = True
+    for e in pygame.event.get():
+        if e.key == pygame.K_t and pause:
+            pause = False
+            game_main_cycle()
+        text1 = font.render("Нажмите t для", 1, (255, 255, 255))
+        text2 = font.render("продолжения игры", 1, (255, 255, 255))
+        screen.blit(text1, (100, 300))
+        screen.blit(text2, (80, 500))
 
 
 def game_over():  # анимация экрана конца игры
@@ -338,7 +352,7 @@ def game_over():  # анимация экрана конца игры
         if 475 > mouse[0] > 250 and 765 > mouse[1] > 700:
             current = HOVER_COLOR
             if pygame.mouse.get_pressed()[0] == 1:
-                menu(button=True)
+                menu()
         else:
             current = COLOR
         pygame.draw.rect(screen, (255, 255, 255), (250, 700, 225, 65))
@@ -397,7 +411,7 @@ def game_main_cycle():  # выношу цикл в отдельную функц
         background = Background('bg3.png')
         pygame.mixer.music.load('data/level3_music.mp3')
         pygame.mixer.music.play(-1)
-        minus_spawn = 0.01
+        minus_spawn = 0.03
         time_left = 500
         speed = 3
     font = pygame.font.Font('data/font.ttf', 25)
@@ -414,8 +428,8 @@ def game_main_cycle():  # выношу цикл в отдельную функц
         max_spawn -= minus_spawn
         spawn_timer += 1
         screen.blit(background.image, (background.rect.x, background.rect.y))
-        if 0 == background.rect.y:
-            background.rect.y = -1185
+        if 0 <= background.rect.y:
+            background.rect.y = -3200
         background.rect.y += speed
         all_sprites.draw(screen)
         all_sprites.update()
@@ -500,7 +514,7 @@ def victory():  # экран победы
         if 475 > mouse[0] > 250 and 765 > mouse[1] > 700:
             current = HOVER_COLOR
             if pygame.mouse.get_pressed()[0] == 1:
-                menu(button=True)
+                menu()
         else:
             current = COLOR
         pygame.draw.rect(screen, (255, 255, 255), (250, 700, 225, 65))
@@ -510,7 +524,7 @@ def victory():  # экран победы
         clock.tick(100)
 
 
-def menu(button=False):  # главное меню
+def menu():  # главное меню
     menu_image = load_image('menu1.png')
     pygame.mixer.music.load('data/level2_music.mp3')
     pygame.mixer.music.play(-1)
@@ -522,6 +536,8 @@ def menu(button=False):  # главное меню
     while 1:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                terminate()
+            if pygame.mouse.get_pressed()[0] == 1 and exit_pos:
                 terminate()
         screen.blit(menu_image, (0, 0))
         mouse = pygame.mouse.get_pos()
@@ -546,17 +562,15 @@ def menu(button=False):  # главное меню
         pygame.draw.rect(screen, current, (22, 627, 456, 61))
         screen.blit(button2_text, (25, 635))
         if 480 > mouse[0] > 20 and 760 > mouse[1] > 695:
+            exit_pos = True
             current = HOVER_COLOR
-            if pygame.mouse.get_pressed()[0] == 1 and not button:
-                terminate()
         else:
+            exit_pos = False
             current = COLOR
         pygame.draw.rect(screen, (255, 255, 255), (20, 695, 460, 65))
         pygame.draw.rect(screen, current, (22, 697, 456, 61))
         screen.blit(button3_text, (80, 705))
         pygame.display.flip()
-        if clock.tick() > 8:
-            button = False
 
 
 def choose_level():  # выбор уровня
