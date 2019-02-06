@@ -442,7 +442,7 @@ def game_main_cycle():  # выношу цикл в отдельную функц
                 ScoreBox()
             enemy = Enemy(random.randint(0, width), -40, random.choice(e_type))
             spawn_timer = 0
-        clock.tick(fps)
+        clock.tick(FPS)
         pygame.display.flip()
     pygame.mixer.music.stop()
 
@@ -685,7 +685,7 @@ pygame.init()
 size = width, height = 500, 800
 screen = pygame.display.set_mode(size)
 screen.fill((0, 0, 0))
-fps = 60
+FPS = 60
 font = pygame.font.Font('data/font.ttf', 50)
 COLOR, HOVER_COLOR = (170, 50, 50), (190, 60, 60)
 current = COLOR
