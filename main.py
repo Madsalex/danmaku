@@ -269,8 +269,6 @@ def events():  # обработка событий из главного цик�
                 if score * 10 >= 3:
                     player_bullet = PlayerBullet(dir_x, dir_y)
                     score -= 0.3
-            elif e.key == pygame.K_t:
-                pause()
     if keys[pygame.K_UP]:
         player.rect.y -= speed
     if keys[pygame.K_DOWN]:
