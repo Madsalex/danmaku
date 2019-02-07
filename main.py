@@ -281,6 +281,7 @@ def events():  # обработка событий из главного цик�
         player.rect.x += speed
 
 
+"""
 def pause():  # пауза
     pause = True
     for e in pygame.event.get():
@@ -291,6 +292,7 @@ def pause():  # пауза
         text2 = font.render("продолжения игры", 1, (255, 255, 255))
         screen.blit(text1, (100, 300))
         screen.blit(text2, (80, 500))
+"""
 
 
 def game_over():  # анимация экрана конца игры
