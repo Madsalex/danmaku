@@ -534,11 +534,6 @@ def menu():  # главное меню
     button3_text = font.render("Выйти из игры", 1, (255, 255, 255))
     current = COLOR
     while 1:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                terminate()
-            if pygame.mouse.get_pressed()[0] == 1 and exit_pos:
-                terminate()
         screen.blit(menu_image, (0, 0))
         mouse = pygame.mouse.get_pos()
         if 480 > mouse[0] > 20 and 620 > mouse[1] > 555:
@@ -567,6 +562,11 @@ def menu():  # главное меню
         else:
             exit_pos = False
             current = COLOR
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if pygame.mouse.get_pressed()[0] == 1 and exit_pos:
+                terminate()
         pygame.draw.rect(screen, (255, 255, 255), (20, 695, 460, 65))
         pygame.draw.rect(screen, current, (22, 697, 456, 61))
         screen.blit(button3_text, (80, 705))
